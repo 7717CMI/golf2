@@ -1,0 +1,50 @@
+{
+  "ASEAN and MEA": {
+    "By Product Type": {
+      "Electric Golf Cart - Lead-Acid Battery": {
+        "Lead-Acid Battery": {}
+      },
+      "Electric Golf Cart - Lithium-ion Battery": {
+        "Lithium-ion Battery": {}
+      },
+      "ICE Golf Carts - Gasoline": {
+        "Gasoline": {}
+      },
+      "ICE Golf Carts - Diesel": {
+        "Diesel": {}
+      }
+    },
+    "By Seating Capacity": {},
+    "By Usage Mode": {},
+    "By Seller Type": {},
+    "By Sales Channel": {},
+    "By End-User/Customer": {},
+    "By Region": {
+      "Middle East & Africa": {
+        "GCC": {
+          "Saudi Arabia": {},
+          "UAE": {},
+          "Qatar": {},
+          "Kuwait": {},
+          "Oman": {},
+          "Bahrain": {}
+        },
+        "Turkey": {},
+        "South Africa": {},
+        "Rest of Middle East & Africa": {}
+      },
+      "ASEAN": {
+        "Thailand": {},
+        "Vietnam": {},
+        "Cambodia": {},
+        "Laos": {},
+        "Myanmar": {},
+        "Indonesia": {},
+        "Malaysia": {},
+        "Philippines": {},
+        "Singapore": {},
+        "Brunei": {}
+      }
+    }
+  }
+}
