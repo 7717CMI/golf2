@@ -130,7 +130,7 @@ export function CompetitiveIntelligence({ height }: CompetitiveIntelligenceProps
 
   return (
     <div className="w-full">
-      <h2 className="text-xl font-bold text-black mb-6">Competitive Intelligence 2022-2025</h2>
+      <h2 className="text-xl font-bold text-black mb-6">Competitive Intelligence 2025</h2>
 
       {/* Tab Navigation */}
       <div className="flex gap-2 mb-6 border-b border-gray-300">

@@ -222,10 +222,10 @@ export default function DashboardPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
           <p className="text-sm text-amber-800">
-            <span className="font-semibold">Note:</span> All the data in this dashboard is demo data. No real World UTV data is related to this.
+            <span className="font-semibold">Note:</span> All the data in this dashboard is demo data. No real World Golf data is related to this.
           </p>
         </div>
-
+    
         <div className="grid grid-cols-12 gap-6">
           {/* Sidebar - Enhanced Filter Panel */}
           <aside className={`transition-all duration-300 ${
@@ -392,7 +392,7 @@ export default function DashboardPage() {
                                 : 'border-transparent text-black hover:text-black hover:border-gray-300'
                             }`}
                           >
-                            👥 Customer Intelligence
+                            👥 Customer Intelligence 2025
                           </button>
                         )}
                         {isChartVisible('customer-intelligence-database') && (
@@ -404,7 +404,7 @@ export default function DashboardPage() {
                                 : 'border-transparent text-black hover:text-black hover:border-gray-300'
                             }`}
                           >
-                            👤 Customer Intelligence
+                            👤 Customer Intelligence 2025
                           </button>
                         )}
                       </>
@@ -499,6 +499,7 @@ export default function DashboardPage() {
                     
                     {activeTab === 'customer-intelligence' && (
                       <div id="customer-intelligence-chart" className="space-y-8">
+                        <h2 className="text-2xl font-bold text-black mb-6">Customer Intelligence 2025</h2>
                         <div>
                           <CustomerIntelligenceHeatmap
                             title="Customer Intelligence - Industry Category × Region"
@@ -596,7 +597,7 @@ export default function DashboardPage() {
                     {isChartVisible('customer-intelligence') && (
                       <div className="space-y-8">
                         <div className="border-b pb-8">
-                          <h3 className="text-lg font-semibold text-black mb-4">👥 Customer Intelligence</h3>
+                          <h3 className="text-lg font-semibold text-black mb-4">👥 Customer Intelligence 2025</h3>
                           <CustomerIntelligenceHeatmap
                             title="Customer Intelligence - Industry Category × Region"
                             height={450}
@@ -614,7 +615,7 @@ export default function DashboardPage() {
 
                     {isChartVisible('customer-intelligence-database') && (
                       <div className="border-b pb-8">
-                        <h3 className="text-lg font-semibold text-black mb-4">👤 Customer Intelligence Database</h3>
+                        <h3 className="text-lg font-semibold text-black mb-4">👤 Customer Intelligence 2025</h3>
                         <CustomerIntelligenceDatabase
                           title="Customer Intelligence Database"
                           height={600}
