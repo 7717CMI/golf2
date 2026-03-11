@@ -931,8 +931,8 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
           sampleRecord: filteredRecords[0],
           hasCAGR: filteredRecords[0]?.cagr !== undefined,
           hasTimeSeries: filteredRecords[0]?.time_series !== undefined,
-          endYear,
-          startYear
+          cagrEndYear,
+          cagrStartYear
         })
         setErrorMessage('No bubbles could be created from the filtered data. Check if records have CAGR and time_series data.')
         return { bubbles: [], xLabel: '', yLabel: '', totalBubbles: 0 }
