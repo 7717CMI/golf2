@@ -30,7 +30,7 @@ export function MultiLineChart({ title, height = 400 }: MultiLineChartProps) {
       ? data.data.value.geography_segment_matrix
       : data.data.volume.geography_segment_matrix
 
-    const filtered = filterData(dataset, filters)
+    const filtered = filterData(dataset, filters, data?.dimensions?.geographies)
 
     // Determine effective aggregation level for chart preparation
     // When no segments are selected for the current segment type, default to Level 2
@@ -77,8 +77,7 @@ export function MultiLineChart({ title, height = 400 }: MultiLineChartProps) {
 
     // FIRST: Check for regional segment types - these need special handling regardless of view mode
     const advancedSegments = filters.advancedSegments || []
-    const isRegionalSegmentType = filters.segmentType === 'By Region' ||
-                                  filters.segmentType === 'By State' ||
+    const isRegionalSegmentType = filters.segmentType === 'By State' ||
                                   filters.segmentType === 'By Country'
 
     if (isRegionalSegmentType && advancedSegments.length > 0) {

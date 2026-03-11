@@ -1,4 +1,4 @@
-import type { DataRecord, FilterState, ChartDataPoint, HeatmapCell, ComparisonTableRow } from './types'
+import type { DataRecord, FilterState, ChartDataPoint, HeatmapCell, ComparisonTableRow, GeographyDimension } from './types'
 
 /**
  * Automatically determine the appropriate aggregation level based on selected segments
@@ -58,17 +58,18 @@ export function determineAggregationLevel(
  */
 export function filterData(
   data: DataRecord[],
-  filters: FilterState & { advancedSegments?: any[] }
+  filters: FilterState & { advancedSegments?: any[] },
+  geographyDimension?: GeographyDimension
 ): DataRecord[] {
   // AUTOMATIC LEVEL DETECTION: Determine level based on selected segments
   // Hide aggregation level complexity from users
   let effectiveAggregationLevel = filters.aggregationLevel
 
-  // Special handling for regional segment types: "By Region", "By State", "By Country"
+  // Special handling for regional segment types: "By State", "By Country"
   // These segment types have geographies as segments, so the hierarchy is different
   // Don't force aggregation level 2 for these - let all records through
-  const isRegionalSegmentType = filters.segmentType === 'By Region' ||
-                                 filters.segmentType === 'By State' ||
+  // Note: "By Region" is no longer a segment type - its hierarchy moved to geography selection
+  const isRegionalSegmentType = filters.segmentType === 'By State' ||
                                  filters.segmentType === 'By Country'
 
   // If aggregationLevel is explicitly set to null or undefined, use automatic detection
@@ -129,56 +130,21 @@ export function filterData(
     // In geography mode, when a parent geography is selected (e.g., "North America"),
     // also include records from child geographies (e.g., "U.S.", "Canada")
 
-    // SPECIAL CASE: For regional segment types ("By Region", "By State", "By Country"),
+    // SPECIAL CASE: For regional segment types ("By State", "By Country"),
     // skip the geography filter entirely because:
-    // - "By Region" data exists under regional geographies (North America, Europe, etc.), NOT under Global
-    // - The segments themselves ARE the geographical breakdown (e.g., U.S. under North America > By Region)
+    // - Regional data exists under regional geographies (North America, Europe, etc.), NOT under Global
+    // - The segments themselves ARE the geographical breakdown
     // - Filtering by geography would incorrectly exclude all records when "Global" is selected
     let geoMatch = filters.geographies.length === 0 ||
       filters.geographies.includes(record.geography) ||
       isRegionalSegmentType // Skip geography filter for regional segment types
 
-    // Also match if the record's parent geography is in the selected list
-    // This allows selecting "North America" to include U.S., Canada records
-    if (!geoMatch && record.parent_geography && filters.geographies.includes(record.parent_geography)) {
-      geoMatch = true
-    }
+    // Only include records whose geography is EXPLICITLY selected.
+    // No hidden parent matching, no child expansion - only exact matches.
+    // This prevents double counting (e.g., selecting "ASEAN" should only show ASEAN aggregate,
+    // not ASEAN + Thailand + Vietnam + ... or "ASEAN and MEA" records)
 
-    // In ALL view modes, if no records match the selected geographies for this segment type,
-    // we should include Global data as a fallback (handled later in aggregation)
-    // This is critical for segment-mode when data only exists under "Global" but user selects regional geographies
-    if (!geoMatch) {
-      // Check if any selected geography is a parent of this record's geography
-      // Regions contain countries - map them accordingly
-      const regionToCountries: Record<string, string[]> = {
-        'North America': ['U.S.', 'Canada'],
-        'Europe': ['U.K.', 'Germany', 'Italy', 'France', 'Spain', 'Russia', 'Rest of Europe'],
-        'Asia Pacific': ['China', 'India', 'Japan', 'South Korea', 'ASEAN', 'Australia', 'Rest of Asia Pacific'],
-        'Latin America': ['Brazil', 'Argentina', 'Mexico', 'Rest of Latin America'],
-        'Middle East': ['GCC', 'Israel', 'Rest of Middle East'],
-        'Africa': ['North Africa', 'Central Africa', 'South Africa']
-      }
-
-      // If a region is selected and this record is a country in that region, include it
-      for (const selectedGeo of filters.geographies) {
-        if (regionToCountries[selectedGeo]?.includes(record.geography)) {
-          geoMatch = true
-          break
-        }
-      }
-
-      // IMPORTANT: Include Global data when regional geographies are selected
-      // This is because segment types like "By Form" only exist under Global
-      // When user selects "North America" + "By Form", we need Global's By Form data
-      if (!geoMatch && record.geography === 'Global') {
-        // Check if any selected geography is a regional geography (not Global itself)
-        const regionalGeographies = ['North America', 'Europe', 'Asia Pacific', 'Latin America', 'Middle East', 'Africa', 'Middle East & Africa', 'ASEAN', 'SAARC Region', 'CIS Region']
-        const hasRegionalSelection = filters.geographies.some(g => regionalGeographies.includes(g))
-        if (hasRegionalSelection && !filters.geographies.includes('Global')) {
-          geoMatch = true
-        }
-      }
-    }
+    // No additional geography expansion needed - each geography has its own data
 
     if (!geoMatch) {
       return false
@@ -349,11 +315,11 @@ export function filterData(
     // 5. Segment filter - handle both advancedSegments and regular segments
     let segmentMatch = true
 
-    // Special handling for "By Region" segment type
-    // For "By Region", the selected "segment" is actually a geography name (like "North America")
+    // Special handling for regional segment types
+    // For these, the selected "segment" is actually a geography name (like "North America")
     // and we need to match records where record.geography === selected segment
-    const isRegionSegmentType = filters.segmentType === 'By Region' ||
-                                filters.segmentType === 'By State' ||
+    // Note: "By Region" is no longer a segment type - its hierarchy moved to geography selection
+    const isRegionSegmentType = filters.segmentType === 'By State' ||
                                 filters.segmentType === 'By Country'
 
     // Check if we're using advancedSegments (multi-type selection)
@@ -1721,9 +1687,8 @@ export function prepareIntelligentMultiLevelData(
   // In this case, we want to show each selected segment as a separate series
   const hasExplicitLevel1Selection = selectedLevel1Segments.length > 0
 
-  // Check if this is a regional segment type (By Region, By State, By Country)
-  const isRegionalSegmentType = filters.segmentType === 'By Region' ||
-                                filters.segmentType === 'By State' ||
+  // Check if this is a regional segment type (By State, By Country)
+  const isRegionalSegmentType = filters.segmentType === 'By State' ||
                                 filters.segmentType === 'By Country'
 
   // Group records by segment (or geography) and find the best representation
@@ -1877,8 +1842,7 @@ export function prepareIntelligentMultiLevelData(
     }
 
     // Check if this is a regional segment type
-    const isRegionalSegmentType = filters.segmentType === 'By Region' ||
-                                  filters.segmentType === 'By State' ||
+    const isRegionalSegmentType = filters.segmentType === 'By State' ||
                                   filters.segmentType === 'By Country'
 
     // Standard logic for non-Global mapping cases

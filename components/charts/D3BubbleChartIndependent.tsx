@@ -19,7 +19,7 @@ function OpportunityGeographyMultiSelect() {
   const [searchTerm, setSearchTerm] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
   
-  const shouldHide = opportunityFilters.segmentType === 'By Region' || opportunityFilters.segmentType === 'By State'
+  const shouldHide = opportunityFilters.segmentType === 'By State'
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -464,7 +464,7 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
       })
 
       // Use filterData to apply all filters consistently with other charts
-      let filteredRecords = filterData(dataset, activeFilters)
+      let filteredRecords = filterData(dataset, activeFilters, data?.dimensions?.geographies)
 
       // Handle geography filtering for bubble chart
       // Check if data exists for selected geographies with the current segment type
@@ -790,7 +790,7 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
         const uniqueAggregationLevels = [...new Set(dataset.map(r => r.aggregation_level).filter(l => l !== null && l !== undefined))]
         
         // Check what records exist after filterData
-        const afterFilterData = filterData(dataset, activeFilters)
+        const afterFilterData = filterData(dataset, activeFilters, data?.dimensions?.geographies)
         
         const errorDetails = {
           datasetLength: dataset.length,
@@ -851,8 +851,13 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
 
       // Build matrix: Geography x Segment Type with CAGR from JSON
       const bubbles: BubbleDataPoint[] = []
-      const [startYear, endYear] = activeFilters.yearRange
-      
+      const [, displayEndYear] = activeFilters.yearRange
+
+      // CAGR is always calculated from forecast period 2026-2033
+      const cagrStartYear = 2026
+      const cagrEndYear = 2033
+      const cagrYears = cagrEndYear - cagrStartYear // 7 years
+
       // Helper function to calculate CAGR from time series
       const calculateCAGR = (startValue: number, endValue: number, years: number): number => {
         if (startValue <= 0 || endValue <= 0 || years <= 0) return 0
@@ -863,20 +868,19 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
       // Calculate max values for normalization
       let maxCAGR = 0
       let maxValue = 0
-      const years = endYear - startYear
 
       filteredRecords.forEach(record => {
-        const value = record.time_series[endYear] || 0
-        const baseValue = record.time_series[startYear] || 0
-        const cagr = calculateCAGR(baseValue, value, years)
+        const value = record.time_series[cagrEndYear] || 0
+        const baseValue = record.time_series[cagrStartYear] || 0
+        const cagr = calculateCAGR(baseValue, value, cagrYears)
         maxCAGR = Math.max(maxCAGR, Math.abs(cagr))
         maxValue = Math.max(maxValue, value)
       })
 
       filteredRecords.forEach((record, index) => {
-        const value = record.time_series[endYear] || 0
-        const baseValue = record.time_series[startYear] || 0
-        const cagr = calculateCAGR(baseValue, value, years)
+        const value = record.time_series[cagrEndYear] || 0
+        const baseValue = record.time_series[cagrStartYear] || 0
+        const cagr = calculateCAGR(baseValue, value, cagrYears)
 
         // Normalize both CAGR and Market Size to 0-100 scale for full chart spread
         // This ensures bubbles can spread across the entire chart area
@@ -897,7 +901,7 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
         // Calculate bubble size based on absolute growth for better visual representation
         const absoluteGrowth = value - baseValue
         const maxGrowth = Math.max(...filteredRecords.map(r =>
-          (r.time_series[endYear] || 0) - (r.time_series[startYear] || 0)
+          (r.time_series[cagrEndYear] || 0) - (r.time_series[cagrStartYear] || 0)
         ))
         const sizeIndex = maxGrowth > 0 ? (absoluteGrowth / maxGrowth) * 100 : cagrIndex
 
@@ -1005,7 +1009,7 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
       ...activeFilters,
       geographies: [selectedGeography], // Use single geography for bubble chart
       advancedSegments: activeFilters.advancedSegments || [] as any
-    })
+    }, data?.dimensions?.geographies)
 
     if (filteredRecords.length === 0) {
       return { bubbles: [], xLabel: '', yLabel: '', totalBubbles: 0 }
@@ -1024,15 +1028,15 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
     
     const segmentsToProcess = Array.from(segmentGroups.keys())
 
-    // Calculate metrics for each segment
-    const [startYear, endYear] = activeFilters.yearRange
-    const forecastYear = endYear
-    const baseYear = startYear
-    
+    // CAGR always calculated from forecast period 2026-2033
+    const baseYear = 2026
+    const forecastYear = 2033
+
     // Calculate total market value for market share calculation
     const leafRecords = filteredRecords.filter(record => record.is_aggregated === false)
+    const leafForShare = leafRecords.length > 0 ? leafRecords : filteredRecords
     let totalMarketValue2024 = 0
-    leafRecords.forEach(record => {
+    leafForShare.forEach(record => {
       const value = record.time_series[baseYear] || 0
       totalMarketValue2024 += value
     })
@@ -1806,7 +1810,7 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-black">CAGR (2024-2033):</span>
+                  <span className="text-sm text-black">CAGR (2026-2033):</span>
                   <span className={`text-sm font-semibold ${
                     tooltipData.cagr > 0 ? 'text-green-600' : tooltipData.cagr < 0 ? 'text-red-600' : 'text-black'
                   }`}>
@@ -1814,7 +1818,7 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-black">Growth (2024-2033):</span>
+                  <span className="text-sm text-black">Growth (2026-2033):</span>
                   <span className={`text-sm font-semibold ${
                     tooltipData.absoluteGrowth > 0 ? 'text-green-600' : tooltipData.absoluteGrowth < 0 ? 'text-red-600' : 'text-black'
                   }`}>

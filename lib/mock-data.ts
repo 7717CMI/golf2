@@ -32,7 +32,10 @@ export function createMockData(): ComparisonData {
         global: ['Global'],
         regions: [],
         countries: {},
-        all_geographies: ['Global']
+        all_geographies: ['Global'],
+        hierarchy: {},
+        parent_map: {},
+        hidden_geographies: []
       },
       segments: {
         'By End-Use*Product Type': {

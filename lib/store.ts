@@ -273,7 +273,8 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
         }
         
         // Determine if we should clear or restore geographies for the new segment type
-        const shouldClearGeographies = newSegmentType === 'By Region' || newSegmentType === 'By State'
+        // Note: "By Region" no longer exists as segment type - its hierarchy moved to geography selection
+        const shouldClearGeographies = newSegmentType === 'By State'
         const savedGeographies = state.geographyFiltersBySegmentType[newSegmentType]
         
         // If it's "By Application VS By Type" and we have saved geographies, restore them

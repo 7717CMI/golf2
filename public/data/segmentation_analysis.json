@@ -14,11 +14,67 @@
         "Diesel": {}
       }
     },
-    "By Seating Capacity": {},
-    "By Usage Mode": {},
-    "By Seller Type": {},
-    "By Sales Channel": {},
-    "By End-User/Customer": {},
+    "By Seating Capacity": {
+      "2-Seater": {
+        "2-Seater": {}
+      },
+      "4-Seater": {
+        "4-Seater": {}
+      },
+      "6-Seater": {
+        "6-Seater": {}
+      },
+      "8-Seater and Above": {
+        "8-Seater and Above": {}
+      }
+    },
+    "By Usage Mode": {
+      "Passenger Golf Carts": {
+        "Passenger Golf Carts": {}
+      },
+      "Utility Golf Carts": {
+        "Utility Golf Carts": {}
+      }
+    },
+    "By Seller Type": {
+      "Direct Sales (OEM to Customer)": {
+        "Direct Sales (OEM to Customer)": {}
+      },
+      "Dealer/Distributor Sales": {
+        "Dealer/Distributor Sales": {}
+      },
+      "Retailer": {
+        "Retailer": {}
+      }
+    },
+    "By Sales Channel": {
+      "Online": {
+        "Online": {}
+      },
+      "Offline": {
+        "Offline": {}
+      }
+    },
+    "By End-User/Customer": {
+      "Golf Courses & Clubs": {
+        "Golf Courses & Clubs": {}
+      },
+      "Hospitality & Tourism (Hotels, Resorts, Theme Parks)": {
+        "Hospitality & Tourism (Hotels, Resorts, Theme Parks)": {}
+      },
+      "Airports & Transportation Hubs": {
+        "Airports & Transportation Hubs": {}
+      },
+      "Industrial Facilities & Warehouses": {
+        "Industrial Facilities & Warehouses": {}
+      },
+      "Residential Communities": {
+        "Residential Communities": {}
+      },
+      "Educational & Healthcare Campuses": {
+        "Educational & Healthcare Campuses": {}
+      }
+    },
     "By Region": {
       "Middle East & Africa": {
         "GCC": {

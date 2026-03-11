@@ -24,7 +24,7 @@ export function ComparisonTable({ title, height = 600 }: ComparisonTableProps) {
       : data.data.volume.geography_segment_matrix
 
     // Filter data
-    const filtered = filterData(dataset, filters)
+    const filtered = filterData(dataset, filters, data?.dimensions?.geographies)
 
     // Get the selected year (use base year or middle of range)
     const year = filters.yearRange[0] + Math.floor((filters.yearRange[1] - filters.yearRange[0]) / 2)

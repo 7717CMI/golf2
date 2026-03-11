@@ -22,6 +22,9 @@ export interface GeographyDimension {
   regions: string[];
   countries: Record<string, string[]>;
   all_geographies: string[];
+  hierarchy: Record<string, string[]>; // parent geography -> child geographies (e.g., "Middle East & Africa" -> ["GCC", "Turkey", ...])
+  parent_map: Record<string, string>; // child geography -> parent geography (e.g., "Middle East & Africa" -> "ASEAN and MEA")
+  hidden_geographies: string[]; // geographies that exist in data but are hidden from UI (e.g., "ASEAN and MEA")
 }
 
 export interface SegmentDimension {

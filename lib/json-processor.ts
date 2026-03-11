@@ -9,7 +9,8 @@ import path from 'path'
 
 // Year transformation offset: adds this value to all years in the data
 // Example: YEAR_OFFSET = 1 transforms 2020→2021, 2021→2022, ..., 2032→2033
-const YEAR_OFFSET = 1
+// Set to 0 when JSON already contains correct year labels (e.g., 2021-2033)
+const YEAR_OFFSET = 0
 
 interface RawJsonData {
   [geography: string]: {
@@ -262,15 +263,30 @@ function getSegmentLevel(
   segmentTypeIndex: number
 ): 'parent' | 'leaf' {
   const segmentPath = path.slice(segmentTypeIndex + 1)
-  
-  // Check if any other path has this as a parent
+
+  // Check if any other path has this as a parent (nested structure)
   const hasChildren = allPaths.some(otherPath => {
     if (otherPath.path.length <= path.length) return false
     const otherSegmentPath = otherPath.path.slice(segmentTypeIndex + 1)
     return otherSegmentPath.slice(0, segmentPath.length).join('|') === segmentPath.join('|')
   })
-  
-  return hasChildren ? 'parent' : 'leaf'
+
+  if (hasChildren) return 'parent'
+
+  // Check flat-key convention: "Electric Golf Cart" is a parent if
+  // "Electric Golf Cart - Lead-Acid Battery" exists as another segment key
+  if (segmentPath.length > 0) {
+    const flatKey = segmentPath[0] // e.g., "Electric Golf Cart"
+    const isParentByFlatKey = allPaths.some(otherPath => {
+      const otherSegmentPath = otherPath.path.slice(segmentTypeIndex + 1)
+      if (otherSegmentPath.length === 0) return false
+      const otherFlatKey = otherSegmentPath[0]
+      return otherFlatKey !== flatKey && otherFlatKey.startsWith(flatKey + ' - ')
+    })
+    if (isParentByFlatKey) return 'parent'
+  }
+
+  return 'leaf'
 }
 
 /**
@@ -1244,7 +1260,18 @@ async function processSegmentTypeAsync(
             hasChildrenFinal = true
           }
         }
-        
+
+        // Also check flat-key convention for parent detection
+        // e.g., "Electric Golf Cart" is a parent if "Electric Golf Cart - Lead-Acid Battery" exists
+        if (!hasChildrenFinal && segmentPath.length > 0) {
+          const flatKey = segmentPath[0]
+          const isParentByFlatKey = allPaths.some(otherPath => {
+            const otherSeg = otherPath.path.slice(segmentTypeIndex + 1)
+            return otherSeg.length > 0 && otherSeg[0] !== flatKey && otherSeg[0].startsWith(flatKey + ' - ')
+          })
+          if (isParentByFlatKey) hasChildrenFinal = true
+        }
+
         if (hasChildrenFinal || hasAggregatedFlag) {
           // This path has children OR is marked as aggregated, so it's an aggregated record
           aggregationLevel = calculatedLevel
@@ -1332,18 +1359,33 @@ async function processSegmentTypeAsync(
         timeSeries[transformedYear] = data[yearStr] !== null && data[yearStr] !== undefined ? (data[yearStr] as number) : 0
       })
       
-      // Parse CAGR - it might be a string like "5.2%" or a number
+      // Parse CAGR - stored as decimal in JSON (e.g., 0.077 = 7.7%)
+      // Convert to percentage for display (codebase convention: cagr = 7.7 means 7.7%)
       let cagr = 0
       if (data.CAGR !== null && data.CAGR !== undefined) {
         if (typeof data.CAGR === 'string') {
-          // Extract number from string like "5.2%" or "5.2"
           const cagrStr = data.CAGR.replace('%', '').trim()
           cagr = parseFloat(cagrStr) || 0
+          // If string was already a percentage like "7.7%", don't multiply
         } else if (typeof data.CAGR === 'number') {
-          cagr = data.CAGR
+          // JSON stores CAGR as decimal (0.077), convert to percentage (7.7)
+          cagr = data.CAGR * 100
         }
       }
-      
+
+      // If CAGR is 0 or not provided, calculate from forecast period (2026-2033)
+      // CAGR = ((endValue/startValue)^(1/years) - 1) * 100
+      if (cagr === 0) {
+        const cagrStartYear = 2026 // First forecast year (base year 2025 + 1)
+        const cagrEndYear = allYears.length > 0 ? allYears[allYears.length - 1] + YEAR_OFFSET : 2033
+        const startVal = timeSeries[cagrStartYear]
+        const endVal = timeSeries[cagrEndYear]
+        const years = cagrEndYear - cagrStartYear
+        if (startVal && endVal && startVal > 0 && years > 0) {
+          cagr = (Math.pow(endVal / startVal, 1 / years) - 1) * 100
+        }
+      }
+
       records.push({
         geography,
         geography_level: 'country',
@@ -1354,7 +1396,7 @@ async function processSegmentTypeAsync(
         segment_hierarchy: buildSegmentHierarchy(pathArray, 0, segmentTypeIndex),
         time_series: timeSeries,
         cagr,
-        market_share: 0,
+        market_share: 0, // Will be calculated after all records are built
         is_aggregated: isAggregated,
         aggregation_level: aggregationLevel
       })
@@ -1570,25 +1612,53 @@ export async function processJsonDataAsync(
       throw new Error('No geographies found in any data source. Please check your JSON structure.')
     }
 
-    // Extract regions from "By Region" segment type as additional geographies
-    // This allows filtering by region (Middle East, Latin America, etc.) in the geography dropdown
+    // Extract regions from "By Region" segment type and build geography hierarchy
+    // The segmentation_analysis.json has a nested object structure:
+    //   "By Region": {
+    //     "Middle East & Africa": { "GCC": { "Saudi Arabia": {}, ... }, "Turkey": {}, ... },
+    //     "ASEAN": { "Thailand": {}, "Vietnam": {}, ... }
+    //   }
     const regionGeographies: string[] = []
+    const geographyHierarchy: Record<string, string[]> = {}
+
     for (const topGeo of geographies) {
       const geoData = structureData[topGeo]
       if (geoData && typeof geoData === 'object') {
-        // Look for "By Region" segment type
         const byRegionData = geoData['By Region']
         if (byRegionData && typeof byRegionData === 'object') {
-          // Extract region names (first level keys under "By Region")
-          const regions = Object.keys(byRegionData).filter(key => {
-            const value = byRegionData[key]
-            return value && typeof value === 'object' && !Array.isArray(value)
-          })
-          regions.forEach(region => {
-            if (!regionGeographies.includes(region) && !geographies.includes(region)) {
-              regionGeographies.push(region)
-            }
-          })
+          // Recursively walk the nested object to build hierarchy
+          const walkHierarchy = (obj: Record<string, unknown>, parentName: string | null) => {
+            Object.keys(obj).forEach(name => {
+              const child = obj[name]
+              // Add to regionGeographies if not already tracked
+              if (!regionGeographies.includes(name) && !geographies.includes(name)) {
+                regionGeographies.push(name)
+              }
+              // Add parent->child relationship
+              if (parentName) {
+                if (!geographyHierarchy[parentName]) {
+                  geographyHierarchy[parentName] = []
+                }
+                if (!geographyHierarchy[parentName].includes(name)) {
+                  geographyHierarchy[parentName].push(name)
+                }
+              }
+              // Recurse into children if it's a non-empty object
+              if (child && typeof child === 'object' && !Array.isArray(child) && Object.keys(child).length > 0) {
+                // Check if children are geography nodes (not year data)
+                const childKeys = Object.keys(child)
+                const isYearData = childKeys.every(k => /^\d{4}$/.test(k) || k === 'CAGR' || k === '_aggregated' || k === '_level')
+                if (!isYearData) {
+                  walkHierarchy(child as Record<string, unknown>, name)
+                }
+              }
+            })
+          }
+
+          walkHierarchy(byRegionData, null)
+
+          console.log(`Geography hierarchy from By Region:`)
+          console.log(`  Hierarchy:`, geographyHierarchy)
         }
       }
     }
@@ -1599,7 +1669,44 @@ export async function processJsonDataAsync(
       geographies = [...geographies, ...regionGeographies]
     }
 
-    console.log(`Found ${geographies.length} total geographies:`, geographies)
+    console.log(`Geography hierarchy built:`, geographyHierarchy)
+
+    // Build parent map (child -> parent) for geography filtering
+    const geographyParentMap: Record<string, string> = {}
+    const buildParentMap = (parentName: string, hierarchy: Record<string, string[]>) => {
+      const children = hierarchy[parentName] || []
+      children.forEach(child => {
+        geographyParentMap[child] = parentName
+        // Recurse for nested children
+        if (hierarchy[child]) {
+          buildParentMap(child, hierarchy)
+        }
+      })
+    }
+    // Build parent map from all hierarchy roots
+    Object.keys(geographyHierarchy).forEach(root => {
+      buildParentMap(root, geographyHierarchy)
+    })
+    console.log(`Geography parent map built:`, geographyParentMap)
+
+    // Identify hidden geographies (top-level geographies whose "By Region" data
+    // was used to build the hierarchy). These are containers like "ASEAN and MEA"
+    // that should be hidden from UI but kept for data matching.
+    const hiddenGeographies: string[] = []
+    const topLevelGeos = geographies.filter(geo => !regionGeographies.includes(geo))
+    topLevelGeos.forEach(geo => {
+      // Hide if this geography had "By Region" data that produced hierarchy entries
+      const geoData = structureData[geo]
+      if (geoData && typeof geoData === 'object' && geoData['By Region'] && Object.keys(geographyHierarchy).length > 0) {
+        hiddenGeographies.push(geo)
+      }
+    })
+    console.log(`Hidden geographies (containers):`, hiddenGeographies)
+
+    // Remove hidden geographies from the visible all_geographies list
+    const visibleGeographies = geographies.filter(geo => !hiddenGeographies.includes(geo))
+
+    console.log(`Found ${geographies.length} total geographies (${visibleGeographies.length} visible):`, visibleGeographies)
     const geographySet = new Set(geographies)
     
     // Extract segment types from segmentation data (second level keys)
@@ -1612,18 +1719,24 @@ export async function processJsonDataAsync(
         })
       }
     })
+    // Remove "By Region" from segment types since its hierarchy is now part of geography selection
+    segmentTypes.delete('By Region')
+
     if (segmentTypes.size === 0) {
       throw new Error('No segment types found in segmentation data')
     }
-    console.log(`Found ${segmentTypes.size} segment types:`, Array.from(segmentTypes))
+    console.log(`Found ${segmentTypes.size} segment types (excluding By Region):`, Array.from(segmentTypes))
     
     // Build geography dimension - truly dynamic, no assumptions about structure
-    // All geographies go into all_geographies, regardless of whether they're global, regions, or countries
+    // all_geographies contains only visible geographies (hidden containers like "ASEAN and MEA" are excluded)
     const geographyDimension: GeographyDimension = {
       global: geographies.length === 1 ? geographies : [], // If only one geography, treat as global
       regions: [], // Will be populated dynamically if needed
       countries: {}, // Will be populated dynamically if needed
-      all_geographies: geographies // All geographies from the data
+      all_geographies: visibleGeographies, // Only visible geographies (excludes hidden containers)
+      hierarchy: geographyHierarchy, // Hierarchical structure from "By Region" data
+      parent_map: geographyParentMap, // child -> parent mapping for filter expansion
+      hidden_geographies: hiddenGeographies // hidden parent geographies (e.g., "ASEAN and MEA")
     }
     
     console.log(`Geography dimension built with ${geographies.length} geographies:`, geographies)
@@ -1675,15 +1788,28 @@ export async function processJsonDataAsync(
       // Similar async processing for volume data can be added here
     }
     
-    // Calculate market share for each record
+    // Calculate market share per geography+segment_type group
+    // Share = segment value / total for that geography+segment_type at base year
     const calculateMarketShare = (records: DataRecord[], year: number) => {
-      const yearTotal = records.reduce((sum, r) => sum + (r.time_series[year] || 0), 0)
-      records.forEach(record => {
-        const value = record.time_series[year] || 0
-        record.market_share = yearTotal > 0 ? (value / yearTotal) * 100 : 0
-      })
+      // Group records by geography + segment_type
+      const groups = new Map<string, DataRecord[]>()
+      for (const record of records) {
+        const key = `${record.geography}||${record.segment_type}`
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key)!.push(record)
+      }
+      // For each group, calculate share among leaf-level records (non-aggregated)
+      for (const [, groupRecords] of groups) {
+        // Only use leaf records for total to avoid double counting parent+child
+        const leafRecords = groupRecords.filter(r => r.segment_level === 'leaf' && !r.is_aggregated)
+        const total = leafRecords.reduce((sum, r) => sum + (r.time_series[year] || 0), 0)
+        for (const record of groupRecords) {
+          const value = record.time_series[year] || 0
+          record.market_share = total > 0 ? (value / total) * 100 : 0
+        }
+      }
     }
-    
+
     // Calculate market share for base year
     calculateMarketShare(valueRecords, baseYear)
     if (volumeRecords.length > 0) {

@@ -75,7 +75,7 @@ export function GroupedBarChart({ title, height = 400 }: GroupedBarChartProps) {
     }
 
     // Filter data with the correct effective aggregation level
-    let filtered = filterData(dataset, modifiedFilters)
+    let filtered = filterData(dataset, modifiedFilters, data?.dimensions?.geographies)
 
     // If showLevel1Totals is enabled in geography mode, also include Level 1 aggregated records
     if (filters.viewMode === 'geography-mode' && filters.showLevel1Totals) {
@@ -223,8 +223,7 @@ export function GroupedBarChart({ title, height = 400 }: GroupedBarChartProps) {
     } else {
       // Non-stacked: Get series from prepared data to ensure we use aggregated keys
       // FIRST: Check for regional segment types - these need special handling regardless of view mode
-      const isRegionalSegmentType = filters.segmentType === 'By Region' ||
-                                    filters.segmentType === 'By State' ||
+      const isRegionalSegmentType = filters.segmentType === 'By State' ||
                                     filters.segmentType === 'By Country'
 
       if (isRegionalSegmentType && advancedSegments.length > 0) {

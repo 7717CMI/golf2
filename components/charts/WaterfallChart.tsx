@@ -40,7 +40,7 @@ export function WaterfallChart({ title, height = 400 }: WaterfallChartProps) {
       ? data.data.value.geography_segment_matrix
       : data.data.volume.geography_segment_matrix
 
-    const filtered = filterData(dataset, filters)
+    const filtered = filterData(dataset, filters, data?.dimensions?.geographies)
     const waterfallData = prepareWaterfallData(filtered, filters)
 
     // Calculate cumulative values for waterfall effect

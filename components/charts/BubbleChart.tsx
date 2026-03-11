@@ -46,7 +46,7 @@ export function BubbleChart({ title, height = 500 }: BubbleChartProps) {
       ? data.data.value.geography_segment_matrix
       : data.data.volume.geography_segment_matrix
 
-    const filtered = filterData(dataset, filters)
+    const filtered = filterData(dataset, filters, data?.dimensions?.geographies)
 
     if (filtered.length === 0) return { bubbles: [], xLabel: '', yLabel: '' }
 
@@ -77,9 +77,11 @@ export function BubbleChart({ title, height = 500 }: BubbleChartProps) {
       totalMarketValue += record.time_series[currentYear] || 0
     })
     
-    // Calculate start year value for growth calculation
-    const startYear = filters.yearRange[0]
-    
+    // CAGR always calculated from forecast period 2026-2033
+    const cagrStart = 2026
+    const cagrEnd = 2033
+    const cagrYears = cagrEnd - cagrStart
+
     grouped.forEach((records, key) => {
       // Aggregate values for this group
       let totalValue = 0
@@ -91,8 +93,8 @@ export function BubbleChart({ title, height = 500 }: BubbleChartProps) {
       let segmentType = ''
 
       records.forEach(record => {
-        const startVal = record.time_series[startYear] || 0
-        const endVal = record.time_series[currentYear] || 0
+        const startVal = record.time_series[cagrStart] || 0
+        const endVal = record.time_series[cagrEnd] || 0
         totalValue += endVal
         totalStartValue += startVal
         totalCAGR += record.cagr || 0
@@ -104,19 +106,16 @@ export function BubbleChart({ title, height = 500 }: BubbleChartProps) {
 
       // Calculate market share as percentage of total market
       const marketShare = totalMarketValue > 0 ? (totalValue / totalMarketValue) * 100 : 0
-      
+
       // Calculate absolute growth (end - start)
       const absoluteGrowth = totalValue - totalStartValue
-      
-      // Calculate CAGR from aggregated values (more accurate than averaging)
+
+      // Calculate CAGR from 2026-2033
       let calculatedCAGR = 0
-      if (totalStartValue > 0 && totalValue > 0) {
-        const years = currentYear - startYear
-        if (years > 0) {
-          calculatedCAGR = (Math.pow(totalValue / totalStartValue, 1 / years) - 1) * 100
-        }
+      if (totalStartValue > 0 && totalValue > 0 && cagrYears > 0) {
+        calculatedCAGR = (Math.pow(totalValue / totalStartValue, 1 / cagrYears) - 1) * 100
       } else {
-        // Fallback to average if we can't calculate
+        // Fallback to average from records if we can't calculate
         calculatedCAGR = count > 0 ? totalCAGR / count : 0
       }
 

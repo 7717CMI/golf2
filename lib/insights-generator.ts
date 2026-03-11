@@ -17,6 +17,14 @@ export interface Insight {
 }
 
 /**
+ * Get leaf records for calculations, falling back to all records if no leaves exist
+ */
+function getLeafRecords(records: DataRecord[]): DataRecord[] {
+  const leaves = records.filter(r => !r.is_aggregated)
+  return leaves.length > 0 ? leaves : records
+}
+
+/**
  * Generate insights from filtered data
  */
 export function generateInsights(
@@ -62,17 +70,20 @@ export function generateInsights(
 function findTopPerformer(records: DataRecord[], filters: FilterState, currency: 'USD' | 'INR' = 'USD', volumeUnit: string = 'Million Units'): Insight | null {
   const [startYear, endYear] = filters.yearRange
   const currentYear = endYear
-  
+
+  // Use leaf records to avoid double counting, fallback to all if no leaves
+  const leafRecords = getLeafRecords(records)
+
   // Group by geography or segment based on view mode
   const groupKey = filters.viewMode === 'segment-mode' ? 'segment' : 'geography'
   const grouped = new Map<string, number>()
-  
-  records.forEach(record => {
+
+  leafRecords.forEach(record => {
     const key = record[groupKey]
     const value = record.time_series[currentYear] || 0
     grouped.set(key, (grouped.get(key) || 0) + value)
   })
-  
+
   // Find the top performer
   let topKey = ''
   let topValue = 0
@@ -82,34 +93,31 @@ function findTopPerformer(records: DataRecord[], filters: FilterState, currency:
       topKey = key
     }
   })
-  
+
   if (!topKey) return null
-  
-  // Format value based on currency
+
+  // Format value — data is already in USD Million (or volume units)
   let valueDisplay = ''
   if (filters.dataType === 'value') {
     if (currency === 'INR') {
-      // For INR, use Indian number system
-      if (topValue >= 10000000) {
-        valueDisplay = `₹${(topValue / 10000000).toFixed(2)} Cr`
-      } else if (topValue >= 100000) {
-        valueDisplay = `₹${(topValue / 100000).toFixed(2)} L`
+      if (topValue >= 10000) {
+        valueDisplay = `₹${(topValue / 100).toFixed(2)} Cr`
       } else {
-        valueDisplay = `₹${topValue.toFixed(2)}`
+        valueDisplay = `₹${topValue.toFixed(2)} L`
       }
     } else {
-      valueDisplay = `${(topValue / 1000000).toFixed(2)} USD Mn`
+      valueDisplay = `${topValue.toFixed(2)} USD Mn`
     }
   } else {
     valueDisplay = `${topValue.toFixed(1)} ${volumeUnit}`
   }
-  
+
   return {
     id: 'top-performer',
     type: 'leader',
     title: `${groupKey === 'geography' ? 'Leading Market' : 'Top Segment'}`,
     description: `${topKey} leads with ${valueDisplay} in ${currentYear}`,
-    value: topValue,
+    value: `${valueDisplay}`,
     trend: 'up',
     priority: 'high',
     icon: '🏆'
@@ -121,55 +129,59 @@ function findTopPerformer(records: DataRecord[], filters: FilterState, currency:
  */
 function findGrowthLeader(records: DataRecord[], filters: FilterState): Insight | null {
   const [startYear, endYear] = filters.yearRange
-  
+
+  // Use leaf records to avoid double counting, fallback to all if no leaves
+  const leafRecords = getLeafRecords(records)
+
   // Calculate growth rates
   const groupKey = filters.viewMode === 'segment-mode' ? 'segment' : 'geography'
-  const growthRates = new Map<string, number>()
-  
+  const growthRates = new Map<string, { growth: number, cagr: number }>()
+
   // Group records by key
   const grouped = new Map<string, DataRecord[]>()
-  records.forEach(record => {
+  leafRecords.forEach(record => {
     const key = record[groupKey]
     if (!grouped.has(key)) grouped.set(key, [])
     grouped.get(key)!.push(record)
   })
-  
+
   // Calculate growth for each group
   grouped.forEach((groupRecords, key) => {
     let startValue = 0
     let endValue = 0
-    
+
     groupRecords.forEach(record => {
       startValue += record.time_series[startYear] || 0
       endValue += record.time_series[endYear] || 0
     })
-    
+
     if (startValue > 0) {
       const growth = ((endValue - startValue) / startValue) * 100
-      growthRates.set(key, growth)
+      const years = endYear - startYear
+      const cagr = years > 0 ? (Math.pow(endValue / startValue, 1 / years) - 1) * 100 : 0
+      growthRates.set(key, { growth, cagr })
     }
   })
-  
+
   // Find highest growth
   let maxGrowthKey = ''
   let maxGrowth = -Infinity
-  growthRates.forEach((growth, key) => {
+  let maxCagr = 0
+  growthRates.forEach(({ growth, cagr }, key) => {
     if (growth > maxGrowth) {
       maxGrowth = growth
       maxGrowthKey = key
+      maxCagr = cagr
     }
   })
-  
+
   if (!maxGrowthKey || maxGrowth === -Infinity) return null
-  
-  const years = endYear - startYear
-  const cagr = Math.pow((1 + maxGrowth / 100), 1 / years) - 1
-  
+
   return {
     id: 'growth-leader',
     type: 'growth',
     title: 'Fastest Growing',
-    description: `${maxGrowthKey} shows ${maxGrowth.toFixed(1)}% growth (${(cagr * 100).toFixed(1)}% CAGR)`,
+    description: `${maxGrowthKey} shows ${maxGrowth.toFixed(1)}% growth (${maxCagr.toFixed(1)}% CAGR)`,
     value: `${maxGrowth.toFixed(1)}%`,
     trend: maxGrowth > 0 ? 'up' : 'down',
     priority: 'high',
@@ -183,13 +195,16 @@ function findGrowthLeader(records: DataRecord[], filters: FilterState): Insight 
 function analyzeTrends(records: DataRecord[], filters: FilterState): Insight | null {
   const [startYear, endYear] = filters.yearRange
   const midYear = Math.floor((startYear + endYear) / 2)
-  
+
+  // Use leaf records to avoid double counting, fallback to all if no leaves
+  const leafRecords = getLeafRecords(records)
+
   // Calculate total values for each period
   let earlyTotal = 0
   let midTotal = 0
   let lateTotal = 0
-  
-  records.forEach(record => {
+
+  leafRecords.forEach(record => {
     earlyTotal += record.time_series[startYear] || 0
     midTotal += record.time_series[midYear] || 0
     lateTotal += record.time_series[endYear] || 0
@@ -213,6 +228,7 @@ function analyzeTrends(records: DataRecord[], filters: FilterState): Insight | n
     trend = 'stable'
   }
   
+  if (earlyTotal === 0) return null
   const overallGrowth = ((lateTotal - earlyTotal) / earlyTotal) * 100
   
   return {
@@ -232,26 +248,29 @@ function analyzeTrends(records: DataRecord[], filters: FilterState): Insight | n
  */
 function compareMarkets(records: DataRecord[], filters: FilterState): Insight | null {
   if (filters.viewMode !== 'matrix') return null
-  
+
   const [, endYear] = filters.yearRange
-  
+
+  // Use leaf records to avoid double counting, fallback to all if no leaves
+  const leafRecords = getLeafRecords(records)
+
   // Get unique geographies and segments
   const geographies = new Set<string>()
   const segments = new Set<string>()
-  
-  records.forEach(record => {
+
+  leafRecords.forEach(record => {
     geographies.add(record.geography)
     segments.add(record.segment)
   })
-  
+
   if (geographies.size < 2 || segments.size < 2) return null
-  
+
   // Find best combination
   let bestGeo = ''
   let bestSeg = ''
   let bestValue = 0
-  
-  records.forEach(record => {
+
+  leafRecords.forEach(record => {
     const value = record.time_series[endYear] || 0
     if (value > bestValue) {
       bestValue = value
@@ -259,13 +278,13 @@ function compareMarkets(records: DataRecord[], filters: FilterState): Insight | 
       bestSeg = record.segment
     }
   })
-  
+
   return {
     id: 'market-comparison',
     type: 'comparison',
     title: 'Optimal Market Mix',
     description: `${bestSeg} in ${bestGeo} represents the strongest opportunity`,
-    value: bestValue,
+    value: `${bestValue.toFixed(2)} USD Mn`,
     trend: 'up',
     priority: 'high',
     icon: '🎯'
@@ -281,18 +300,22 @@ function generateForecast(records: DataRecord[], filters: FilterState): Insight 
   // Check if we're looking at future years
   const currentYear = new Date().getFullYear()
   if (endYear <= currentYear) return null
-  
+
+  // Use leaf records to avoid double counting, fallback to all if no leaves
+  const leafRecords = getLeafRecords(records)
+
   // Calculate projected growth
   let historicalTotal = 0
   let futureTotal = 0
-  
-  records.forEach(record => {
+
+  leafRecords.forEach(record => {
     historicalTotal += record.time_series[Math.min(currentYear, endYear)] || 0
     futureTotal += record.time_series[endYear] || 0
   })
   
+  if (historicalTotal === 0) return null
   const projectedGrowth = ((futureTotal - historicalTotal) / historicalTotal) * 100
-  
+
   return {
     id: 'forecast',
     type: 'forecast',
@@ -310,12 +333,15 @@ function generateForecast(records: DataRecord[], filters: FilterState): Insight 
  */
 function analyzeConcentration(records: DataRecord[], filters: FilterState): Insight | null {
   const [, endYear] = filters.yearRange
-  
+
+  // Use leaf records to avoid double counting, fallback to all if no leaves
+  const leafRecords = getLeafRecords(records)
+
   // Calculate total market value
   let totalValue = 0
   const values: number[] = []
-  
-  records.forEach(record => {
+
+  leafRecords.forEach(record => {
     const value = record.time_series[endYear] || 0
     totalValue += value
     if (value > 0) values.push(value)
@@ -366,12 +392,15 @@ export function findCrossovers(
 ): Insight[] {
   const insights: Insight[] = []
   const [startYear, endYear] = filters.yearRange
-  
+
+  // Use leaf records to avoid double counting, fallback to all if no leaves
+  const leafRecords = getLeafRecords(records)
+
   // Group by the comparison dimension
   const groupKey = filters.viewMode === 'segment-mode' ? 'segment' : 'geography'
   const groups = new Map<string, DataRecord[]>()
-  
-  records.forEach(record => {
+
+  leafRecords.forEach(record => {
     const key = record[groupKey]
     if (!groups.has(key)) groups.set(key, [])
     groups.get(key)!.push(record)
@@ -414,7 +443,7 @@ export function findCrossovers(
             type: 'trend',
             title: 'Market Shift',
             description: `${overtaker} overtakes ${overtaken} in ${year}`,
-            value: year,
+            value: `Year ${year}`,
             trend: 'up',
             priority: 'high',
             icon: '🔄'
