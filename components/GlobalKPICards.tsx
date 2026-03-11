@@ -150,11 +150,11 @@ export function GlobalKPICards() {
     const marketName = data.metadata.market_name || 'Global Market'
 
     const geographyLabel = actualSelectedGeographies.length === 0
-      ? `Global ${marketName}`
+      ? ''
       : actualSelectedGeographies.length === 1
-      ? `${actualSelectedGeographies[0]} ${marketName}`
-      : `${actualSelectedGeographies.length} Geographies ${marketName}`
-    const segmentTypeLabel = targetSegmentType || 'All Segments'
+      ? actualSelectedGeographies[0]
+      : `${actualSelectedGeographies.length} Geographies`
+    const segmentTypeLabel = targetSegmentType || ''
 
     return {
       startYear,
@@ -179,12 +179,17 @@ export function GlobalKPICards() {
   return (
     <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-y border-gray-200">
       <div className="container mx-auto px-6 py-3">
-        {/* Descriptive Header */}
+        {/* Descriptive Header - only show when geography or segment is selected */}
+        {(kpiData.geographyLabel || kpiData.segmentTypeLabel) && (
         <div className="mb-3 pb-2 border-b border-gray-300">
           <p className="text-xs text-gray-700">
             <span className="font-semibold">{kpiData.dataTypeLabel}</span>
-            {' for '}
-            <span className="font-semibold">{kpiData.geographyLabel}</span>
+            {kpiData.geographyLabel && (
+              <>
+                {' for '}
+                <span className="font-semibold">{kpiData.geographyLabel}</span>
+              </>
+            )}
             {kpiData.segmentTypeLabel && (
               <>
                 {' | '}
@@ -193,6 +198,7 @@ export function GlobalKPICards() {
             )}
           </p>
         </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
           {/* Market Size Start Year */}
